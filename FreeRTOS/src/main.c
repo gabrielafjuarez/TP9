@@ -55,10 +55,11 @@
 #include "bsp.h"
 #include "task.h"
 #include <stdbool.h>
+#include "semphr.h"
 
 /* === Definicion y Macros ================================================= */
 
-#define COUNT_DELAY 1500000
+#define COUNT_DELAY 1000000
 /* === Declaraciones de tipos de datos internos ============================ */
 
 typedef struct parametros_s {
@@ -70,7 +71,8 @@ typedef struct parametros_s {
 
 /* === Definiciones de variables internas ================================== */
 
-static board_t board;
+//static board_t board;
+    static SemaphoreHandle_t mutex;
 
 /* === Definiciones de variables externas ================================== */
 
@@ -80,68 +82,14 @@ void Blinking(void * parameters) {
     parametros_t parametros = (parametros_t) parameters;
 
     while (true) {
-        DigitalOutputToggle(parametros->led);
+        xSemaphoreTake(mutex, portMAX_DELAY);
+        DigitalOutputActivate(parametros->led);
+        vTaskDelay(pdMS_TO_TICKS(parametros->periodo));
+        DigitalOutputDeactivate(parametros->led);
+        xSemaphoreGive(mutex);
         vTaskDelay(pdMS_TO_TICKS(parametros->periodo));
     }
 }
-
-/*
-void Rojo(void * parameters) {
-    while (true) {
-        if (DigitalInputGetState(board->boton_cambiar)) {
-            DigitalOutputActivate(board->led_rojo);
-        } else {
-            DigitalOutputDeactivate(board->led_rojo);
-        }
-    }
-}
-void Verde(void * parameters) {
-    while (true) {
-        DigitalOutputToggle(board->led_verde);
-        vTaskDelay(pdMS_TO_TICKS(750));
-    }
-}
-*/
-void Amarillo(void * parameters) {
-    TickType_t ultimo_valor;
-    ultimo_valor = xTaskGetTickCount();
-
-    while (true) {
-        DigitalOutputToggle(board->led_amarillo);
-        vTaskDelayUntil(&ultimo_valor, pdMS_TO_TICKS(250));
-    }
-}
-
-void Azul(void * parameters) {
-    while (true) {
-        if (DigitalInputGetState(board->boton_prueba)) {
-            DigitalOutputActivate(board->led_azul);
-        } else {
-            DigitalOutputDeactivate(board->led_azul);
-        }
-    }
-}
-
-void Teclado(void * parameters){
-    TaskHandle_t tarea;
-
-    tarea = xTaskGetHandle("Rojo");
-
-    while (true) {
-        if (DigitalInputHasActivated(board->boton_prender)) {
-            vTaskResume(tarea);
-        } 
-        
-        if (DigitalInputHasDeactivated(board->boton_apagar)) {
-            vTaskSuspend(tarea);
-        }
-    
-        vTaskDelay(pdMS_TO_TICKS(250));
-            
-    }
-}
-
-
 
 
 /* === Definiciones de funciones externas ================================== */
@@ -155,7 +103,8 @@ void Teclado(void * parameters){
  */
 int main(void) {
     static board_t board;
-    static struct parametros_s parametros[3];
+    static struct parametros_s parametros[2];
+   // static SemaphoreHandle_t mutex;
 
     /* Inicializaciones y configuraciones de dispositivos */
     board = BoardCreate();
@@ -163,20 +112,13 @@ int main(void) {
     parametros[0].led = board->led_rojo;
     parametros[0].periodo = 500;
 
-    parametros[1].led = board->led_verde;
-    parametros[1].periodo = 750;
+    parametros[1].led = board->led_azul;
+    parametros[1].periodo = 500;
 
-    // parametros[2].led = board->led_amarillo;
-    // parametros[2].periodo = 250;
-
-
+    mutex = xSemaphoreCreateMutex();
     /* Creación de las tareas */
     xTaskCreate(Blinking, "Rojo", configMINIMAL_STACK_SIZE, (void *)&parametros[0], tskIDLE_PRIORITY + 1, NULL);
-    xTaskCreate(Blinking, "Verde", configMINIMAL_STACK_SIZE, (void *)&parametros[1], tskIDLE_PRIORITY + 1, NULL);
-    xTaskCreate(Teclado, "Teclado", configMINIMAL_STACK_SIZE, (void *)board, tskIDLE_PRIORITY + 4, NULL);
-    xTaskCreate(Amarillo, "Amarillo", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY + 1, NULL);
-    xTaskCreate(Azul, "Azul", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY + 1, NULL);
-    
+    xTaskCreate(Blinking, "Azul", configMINIMAL_STACK_SIZE, (void *)&parametros[1], tskIDLE_PRIORITY + 2, NULL);
 
 /* Arranque del sistema operativo */
     vTaskStartScheduler();
